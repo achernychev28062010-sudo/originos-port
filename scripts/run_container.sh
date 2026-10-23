@@ -45,6 +45,8 @@ done
 sudo rm -f $E/cgroups.json
 sudo cp -a /work/redroid/system/etc/task_profiles.json $E/task_profiles.json
 
+# /sys is the host's: ueventd coldboot writes "add" to every uevent file there, which
+# re-adds the host NIC and takes the runner offline. Read-only keeps the host intact.
 # userdata/metadata are their own partitions on a phone; here they must be separate
 # mounts, because init.rc remounts / read-only in post-fs. RESET=1 wipes them.
 [ -n "${RESET:-}" ] && sudo rm -rf /work/data /work/metadata
@@ -52,6 +54,7 @@ sudo mkdir -p /work/data /work/metadata
 
 docker run -d --privileged --name "$name" -p $port:5555 \
   -v /work/data:/data -v /work/metadata:/metadata \
+  -v /sys:/sys:ro \
   --tmpfs /dev/socket:mode=0755 \
   --device /dev/mapper/control:/dev/device-mapper \
   -v $shim/devblock:/dev/block \

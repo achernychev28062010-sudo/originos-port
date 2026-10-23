@@ -35,8 +35,21 @@ jobs:
       - run: bash scripts/fetch_ota.sh "${{ inputs.ota_url }}" /work/ota
       - run: KEEP=1 bash scripts/build_hybrid.sh redroid/redroid:${{ inputs.redroid_tag }} /work/ota originos:port
 
+      # results land in the job log too, so they survive a dead SSH tunnel
+      - name: First boot attempt
+        continue-on-error: true
+        run: RESET=1 bash scripts/boot_debug.sh
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: first-boot
+          path: /work/out
+
       - name: Wait for debugging (touch /tmp/stop to end)
         run: |
           echo READY > /tmp/ready; cat /tmp/bore.log
           end=$(( $(date +%s) + ${{ inputs.hours }} * 3600 ))
-          while [ ! -f /tmp/stop ] && [ $(date +%s) -lt $end ]; do sleep 30; done
+          while [ ! -f /tmp/stop ] && [ $(date +%s) -lt $end ]; do
+            sleep 60; echo "$(date +%T) $(tail -1 /tmp/bore.log)"
+          done
