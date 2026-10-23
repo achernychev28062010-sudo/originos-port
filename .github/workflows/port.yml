@@ -9,14 +9,39 @@ on:
       redroid_tags:
         description: Redroid base images to try, first that pulls wins
         default: 17.0.0-latest 16.0.0-latest
+      gpu_mode:
+        default: guest
       boot_minutes:
         description: How long to wait for sys.boot_completed
-        default: "20"
+        default: "15"
 
 jobs:
+  # Which stock Redroid actually reaches the home screen on this runner (no GPU)?
+  baseline:
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { tag: 16.0.0-latest, gpu: guest }
+          - { tag: 16.0.0-latest, gpu: auto }
+          - { tag: 15.0.0-latest, gpu: guest }
+          - { tag: 14.0.0-latest, gpu: guest }
+    steps:
+      - uses: actions/checkout@v4
+      - run: bash scripts/host_prep.sh
+      - run: docker pull redroid/redroid:${{ matrix.tag }}
+      - run: bash scripts/boot_test.sh redroid/redroid:${{ matrix.tag }} stock 8 ${{ matrix.gpu }} || true
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: baseline-${{ matrix.tag }}-${{ matrix.gpu }}
+          path: /work/out
+
   port:
     runs-on: ubuntu-24.04-arm
-    timeout-minutes: 340
+    timeout-minutes: 120
     steps:
       - uses: actions/checkout@v4
 
@@ -30,9 +55,6 @@ jobs:
           done
           grep -q '^BASE=' $GITHUB_ENV
 
-      - name: Baseline - stock Redroid boots?
-        run: bash scripts/boot_test.sh "$BASE" stock 8 || true
-
       - name: Fetch and unpack OriginOS partitions
         run: bash scripts/fetch_ota.sh "${{ inputs.ota_url }}" /work/ota
 
@@ -40,10 +62,10 @@ jobs:
         run: bash scripts/build_hybrid.sh "$BASE" /work/ota originos:port
 
       - name: Boot OriginOS
-        run: bash scripts/boot_test.sh originos:port originos ${{ inputs.boot_minutes }} || true
+        run: bash scripts/boot_test.sh originos:port originos ${{ inputs.boot_minutes }} ${{ inputs.gpu_mode }} || true
 
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: results
+          name: port
           path: /work/out

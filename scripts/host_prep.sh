@@ -20,5 +20,5 @@ curl -sL "https://github.com/ssut/payload-dumper-go/releases/download/$ver/paylo
 {
   uname -a; echo; df -h; echo; free -h; echo; nproc
   echo; grep -E 'binder|erofs' /proc/filesystems
-  echo; ls -l /dev/binder* 2>&1
+  echo; ls -l /dev/binder* /dev/dri 2>&1
 } | tee /work/out/host.txt
