@@ -45,21 +45,35 @@ done
 sudo rm -f $E/cgroups.json
 sudo cp -a /work/redroid/system/etc/task_profiles.json $E/task_profiles.json
 
-# /sys is the host's: ueventd coldboot writes "add" to every uevent file there, which
-# re-adds the host NIC and takes the runner offline. Read-only keeps the host intact.
-# Same for /proc/sys (init.rc sets host kernel knobs such as panic_on_oops), and memory is
-# capped so a full OriginOS userspace without working lmkd cannot OOM the runner agent.
+# Not --privileged: a privileged container gets the host's /sys and /proc/sys writable,
+# and OriginOS (ueventd coldboot, init.rc kernel knobs) took the runner down that way.
+# All capabilities instead, so Docker keeps /sys and /proc/sys read-only and masks
+# sysrq; devices Android needs are passed explicitly. Memory is capped so a full
+# userspace without working lmkd cannot OOM the runner agent.
 # userdata/metadata are their own partitions on a phone; here they must be separate
 # mounts, because init.rc remounts / read-only in post-fs. RESET=1 wipes them.
 [ -n "${RESET:-}" ] && sudo rm -rf /work/data /work/metadata
 sudo mkdir -p /work/data /work/metadata
 
-docker run -d --privileged --name "$name" -p $port:5555 \
+# Device allowlist. ueventd mknods every host device inside the container and vold
+# treats the host disk (sda) as removable storage it may repartition: that is what
+# corrupted the runner's disk. Only the device classes Android needs are usable.
+dm=$(awk '$2=="device-mapper"{print $1}' /proc/devices)
+binder=$(awk '$2=="binder"{print $1}' /proc/devices)
+rules=""
+for r in "c 1:3" "c 1:5" "c 1:7" "c 1:8" "c 1:9" "c 1:11" "c 5:*" "c 136:*" "c 10:*" \
+         "b 7:*" ${dm:+"b $dm:*"} ${binder:+"c $binder:*"}; do
+  rules="$rules --device-cgroup-rule=\"$r rmw\""
+done
+
+eval docker run -d --name "$name" -p $port:5555 \
+  --cap-add ALL --security-opt apparmor=unconfined --security-opt seccomp=unconfined \
+  $rules \
+  --device /dev/kmsg --device /dev/fuse --device /dev/loop-control \
+  --device /dev/mapper/control:/dev/device-mapper \
   -v /work/data:/data -v /work/metadata:/metadata \
-  -v /sys:/sys:ro -v /proc/sys:/proc/sys:ro \
   --memory 11g --memory-swap 11g \
   --tmpfs /dev/socket:mode=0755 \
-  --device /dev/mapper/control:/dev/device-mapper \
   -v $shim/devblock:/dev/block \
   -v /work/rootfs/system/etc:/etc \
   -v $shim/libselinux_shim.so:/system/lib64/libselinux_shim.so:ro \

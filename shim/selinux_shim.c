@@ -96,6 +96,52 @@ _Bool _Z20setProcessGroupLimitjil(unsigned uid, int pid, long v) { (void)uid; (v
 _Bool _Z24setProcessGroupSoftLimitjil(unsigned uid, int pid, long v) { (void)uid; (void)pid; (void)v; return 1; }
 _Bool _Z25setProcessGroupSwappinessjii(unsigned uid, int pid, int v) { (void)uid; (void)pid; (void)v; return 1; }
 
+// /proc/sys is read-only in the (unprivileged) container, but init aborts when it cannot
+// set vm.mmap_rnd_bits. Point that one file at a private copy on tmpfs: init writes and
+// reads back its value there, the host kernel keeps its own.
+extern int strcmp(const char *, const char *);
+extern long read(int, void *, unsigned long);
+extern long write(int, const void *, unsigned long);
+extern int close(int);
+#define O_WRONLY_ 01
+#define O_CREAT_ 0100
+#define O_EXCL_ 0200
+static const char kRndBits[] = "/proc/sys/vm/mmap_rnd_bits";
+static const char kRndBitsCopy[] = "/dev/socket/.mmap_rnd_bits";
+static int (*real_openat)(int, const char *, int, ...);
+
+static const char *redirect(const char *path) {
+  if (!path || strcmp(path, kRndBits) != 0) return path;
+  if (!real_openat) real_openat = (int (*)(int, const char *, int, ...))dlsym(RTLD_NEXT, "openat");
+  int out = real_openat(-100, kRndBitsCopy, O_WRONLY_ | O_CREAT_ | O_EXCL_, 0644);
+  if (out >= 0) {  // first use: seed the copy with the host's value
+    char buf[16]; long n = 0;
+    int in = real_openat(-100, kRndBits, 0);
+    if (in >= 0) { n = read(in, buf, sizeof buf); close(in); }
+    if (n > 0) write(out, buf, (unsigned long)n);
+    close(out);
+  }
+  return kRndBitsCopy;
+}
+
+int openat(int dirfd, const char *path, int flags, ...) {
+  __builtin_va_list ap;
+  __builtin_va_start(ap, flags);
+  int mode = __builtin_va_arg(ap, int);
+  __builtin_va_end(ap);
+  if (!real_openat) real_openat = (int (*)(int, const char *, int, ...))dlsym(RTLD_NEXT, "openat");
+  return real_openat(dirfd, redirect(path), flags, mode);
+}
+int open(const char *path, int flags, ...) {
+  __builtin_va_list ap;
+  __builtin_va_start(ap, flags);
+  int mode = __builtin_va_arg(ap, int);
+  __builtin_va_end(ap);
+  return openat(-100, path, flags, mode);
+}
+int __open_2(const char *path, int flags) { return openat(-100, path, flags, 0); }
+int __openat_2(int dirfd, const char *path, int flags) { return openat(dirfd, path, flags, 0); }
+
 int selabel_lookup_best_match(void *h, char **con, const char *key, const char **aliases, int type) {
   (void)h; (void)key; (void)aliases; (void)type; return ctx(con, "u:object_r:system_file:s0");
 }
