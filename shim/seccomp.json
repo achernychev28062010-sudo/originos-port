@@ -1,0 +1,17 @@
+{
+  "defaultAction": "SCMP_ACT_ALLOW",
+  "architectures": ["SCMP_ARCH_AARCH64", "SCMP_ARCH_ARM"],
+  "syscalls": [
+    {
+      "names": [
+        "clock_settime", "clock_settime64", "clock_adjtime", "clock_adjtime64",
+        "settimeofday", "adjtimex",
+        "init_module", "finit_module", "delete_module",
+        "kexec_load", "kexec_file_load",
+        "swapon", "swapoff"
+      ],
+      "action": "SCMP_ACT_ERRNO",
+      "errnoRet": 1
+    }
+  ]
+}
