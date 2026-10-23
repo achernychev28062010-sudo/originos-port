@@ -7,7 +7,11 @@ command -v clang >/dev/null || sudo apt-get install -y -qq clang lld llvm >/dev/
 mkdir -p /work/out
 sudo dmesg -C
 bash scripts/run_container.sh originos:port oo >/dev/null || exit 1
-sleep "${WAIT:-240}"
+# heartbeat in the job log: if the runner dies mid-boot, the last lines show why
+for _ in $(seq $(( ${WAIT:-240} / 20 ))); do
+  sleep 20
+  echo "$(date +%T) $(free -m | awk '/Mem/{print "host used " $3 "M avail " $7 "M"}') | $(docker stats --no-stream --format 'oo {{.MemUsage}} cpu {{.CPUPerc}} pids {{.PIDs}}' oo 2>/dev/null) | $(sudo dmesg | grep -cE 'init: starting service') starts"
+done
 docker inspect -f 'state={{.State.Status}} exit={{.State.ExitCode}}' oo
 sudo dmesg > /work/out/dmesg.txt
 echo "--- last init events"
