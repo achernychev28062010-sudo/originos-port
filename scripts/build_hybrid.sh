@@ -36,9 +36,9 @@ if [ "${INIT_FROM:-originos}" = redroid ]; then
 fi
 sudo ln -sfn /system/bin/init "$O/init"
 [ -f "$R/system/etc/init/redroid.rc" ] && sudo cp -a "$R/system/etc/init/redroid.rc" "$O/system/etc/init/" || true
-sudo rm -rf "$R"
+[ -n "${KEEP:-}" ] || sudo rm -rf "$R"
 
 { ls -la "$O"; ls -la "$O/system/bin/init" "$O/system/bin/app_process64"; getcap "$O/system/bin/"* 2>/dev/null | head; } > /work/out/rootfs_ls.txt
 sudo tar --xattrs --xattrs-include='*' -C "$O" -c . | docker import -c "ENTRYPOINT $entry" - "$tag"
-sudo rm -rf "$O"
+[ -n "${KEEP:-}" ] || sudo rm -rf "$O"
 docker images | tee -a /work/out/rootfs_ls.txt

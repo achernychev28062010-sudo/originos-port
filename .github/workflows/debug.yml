@@ -1,0 +1,42 @@
+name: originos-debug
+
+# Builds the hybrid image once, then keeps the runner alive with key-only SSH
+# (tunnelled through bore.pub) so boot fixes can be tried without rebuilding.
+on:
+  workflow_dispatch:
+    inputs:
+      ota_url:
+        default: https://sysupdxdl.vivo.com.cn/upgrade/oem/files/20260919214152e4ba49adf9db36886a6d44311a581940.zip
+      redroid_tag:
+        default: 15.0.0-latest
+      ssh_pubkey:
+        default: ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIC12YXLnM5Z1zCbTxa/WcWlhuuPYvcLx/C1sMpK7lTN8 originos-debug
+      hours:
+        default: "5"
+
+jobs:
+  debug:
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 355
+    steps:
+      - uses: actions/checkout@v4
+      - run: bash scripts/host_prep.sh
+      - run: docker pull redroid/redroid:${{ inputs.redroid_tag }}
+
+      - name: Open SSH
+        run: |
+          mkdir -p ~/.ssh && echo "${{ inputs.ssh_pubkey }}" > ~/.ssh/authorized_keys && chmod 700 ~/.ssh && chmod 600 ~/.ssh/authorized_keys
+          sudo sed -i 's/^#\?PasswordAuthentication.*/PasswordAuthentication no/' /etc/ssh/sshd_config
+          sudo systemctl start ssh || sudo service ssh start
+          curl -sL https://github.com/ekzhang/bore/releases/download/v0.5.2/bore-v0.5.2-aarch64-unknown-linux-musl.tar.gz | sudo tar -xz -C /usr/local/bin
+          nohup bore local 22 --to bore.pub > /tmp/bore.log 2>&1 &
+          sleep 5; cat /tmp/bore.log
+
+      - run: bash scripts/fetch_ota.sh "${{ inputs.ota_url }}" /work/ota
+      - run: KEEP=1 bash scripts/build_hybrid.sh redroid/redroid:${{ inputs.redroid_tag }} /work/ota originos:port
+
+      - name: Wait for debugging (touch /tmp/stop to end)
+        run: |
+          echo READY > /tmp/ready; cat /tmp/bore.log
+          end=$(( $(date +%s) + ${{ inputs.hours }} * 3600 ))
+          while [ ! -f /tmp/stop ] && [ $(date +%s) -lt $end ]; do sleep 30; done
