@@ -48,7 +48,9 @@ sudo cp -a /work/redroid/system/etc/task_profiles.json $E/task_profiles.json
 # Not --privileged: a privileged container gets the host's /sys and /proc/sys writable,
 # and OriginOS (ueventd coldboot, init.rc kernel knobs) took the runner down that way.
 # All capabilities instead, so Docker keeps /sys and /proc/sys read-only and masks
-# sysrq; devices Android needs are passed explicitly. Memory is capped so a full
+# sysrq; devices Android needs are passed explicitly. Capabilities that reach past the
+# container (host clock, kernel modules, raw I/O, RT scheduling that ignores --cpus,
+# wake alarms) are dropped. Memory is capped so a full
 # userspace without working lmkd cannot OOM the runner agent.
 # userdata/metadata are their own partitions on a phone; here they must be separate
 # mounts, because init.rc remounts / read-only in post-fs. RESET=1 wipes them.
@@ -72,6 +74,8 @@ done
 
 eval docker run -d --name "$name" -p $port:5555 \
   --cap-add ALL --security-opt apparmor=unconfined --security-opt seccomp=unconfined \
+  --cap-drop SYS_TIME --cap-drop SYS_MODULE --cap-drop SYS_RAWIO --cap-drop SYS_NICE \
+  --cap-drop WAKE_ALARM --cap-drop SYS_BOOT \
   $rules \
   --device /dev/kmsg --device /dev/fuse --device /dev/loop-control \
   --device /dev/mapper/control:/dev/device-mapper \
