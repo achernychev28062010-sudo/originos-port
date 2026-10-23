@@ -61,7 +61,11 @@ sudo mkdir -p /work/data /work/metadata
 dm=$(awk '$2=="device-mapper"{print $1}' /proc/devices)
 binder=$(awk '$2=="binder"{print $1}' /proc/devices)
 rules=""
-for r in "c 1:3" "c 1:5" "c 1:7" "c 1:8" "c 1:9" "c 1:11" "c 5:*" "c 136:*" "c 10:*" \
+# misc (10:x) only by minor: 10:130 is /dev/watchdog, and Android's watchdogd arming the
+# host watchdog reboots the runner as soon as Android stops petting it.
+# fuse 229, device-mapper 236, loop-control 237, uinput 223, tun 200
+for r in "c 1:3" "c 1:5" "c 1:7" "c 1:8" "c 1:9" "c 1:11" "c 5:*" "c 136:*" \
+         "c 10:229" "c 10:236" "c 10:237" "c 10:223" "c 10:200" \
          "b 7:*" ${dm:+"b $dm:*"} ${binder:+"c $binder:*"}; do
   rules="$rules --device-cgroup-rule=\"$r rmw\""
 done
@@ -72,7 +76,7 @@ eval docker run -d --name "$name" -p $port:5555 \
   --device /dev/kmsg --device /dev/fuse --device /dev/loop-control \
   --device /dev/mapper/control:/dev/device-mapper \
   -v /work/data:/data -v /work/metadata:/metadata \
-  --memory 11g --memory-swap 11g \
+  --memory 11g --memory-swap 11g --cpus 3 \
   --tmpfs /dev/socket:mode=0755 \
   -v $shim/devblock:/dev/block \
   -v /work/rootfs/system/etc:/etc \
