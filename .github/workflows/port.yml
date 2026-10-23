@@ -1,0 +1,49 @@
+name: originos-port
+
+on:
+  workflow_dispatch:
+    inputs:
+      ota_url:
+        description: Official vivo full OTA zip
+        default: https://sysupdxdl.vivo.com.cn/upgrade/oem/files/20260919214152e4ba49adf9db36886a6d44311a581940.zip
+      redroid_tags:
+        description: Redroid base images to try, first that pulls wins
+        default: 17.0.0-latest 16.0.0-latest
+      boot_minutes:
+        description: How long to wait for sys.boot_completed
+        default: "20"
+
+jobs:
+  port:
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 340
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Host prep (disk, binder, tools)
+        run: bash scripts/host_prep.sh
+
+      - name: Pull Redroid base
+        run: |
+          for t in ${{ inputs.redroid_tags }}; do
+            if docker pull redroid/redroid:$t; then echo "BASE=redroid/redroid:$t" >> $GITHUB_ENV; break; fi
+          done
+          grep -q '^BASE=' $GITHUB_ENV
+
+      - name: Baseline - stock Redroid boots?
+        run: bash scripts/boot_test.sh "$BASE" stock 8 || true
+
+      - name: Fetch and unpack OriginOS partitions
+        run: bash scripts/fetch_ota.sh "${{ inputs.ota_url }}" /work/ota
+
+      - name: Build hybrid image
+        run: bash scripts/build_hybrid.sh "$BASE" /work/ota originos:port
+
+      - name: Boot OriginOS
+        run: bash scripts/boot_test.sh originos:port originos ${{ inputs.boot_minutes }} || true
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: results
+          path: /work/out
