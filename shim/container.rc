@@ -1,3 +1,5 @@
 # Container port: every service gets the SELinux shim, since the host kernel has no SELinux.
 on early-init
-    export LD_PRELOAD /system/lib64/libselinux_shim.so
+    # bare name: system processes find the /system copy, vendor ones the /vendor copy
+    # (an absolute /system path is not accessible from the vendor linker namespace)
+    export LD_PRELOAD libselinux_shim.so

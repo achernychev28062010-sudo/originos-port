@@ -1,0 +1,13 @@
+{
+  "Cgroups2": {
+    "Path": "/sys/fs/cgroup",
+    "Mode": "0775",
+    "UID": "system",
+    "GID": "system",
+    "Controllers": [
+      { "Controller": "cpu", "Path": ".", "NeedsActivation": true, "Optional": true },
+      { "Controller": "cpuset", "Path": ".", "NeedsActivation": true, "Optional": true },
+      { "Controller": "memory", "Path": ".", "NeedsActivation": true, "Optional": true }
+    ]
+  }
+}

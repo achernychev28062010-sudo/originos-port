@@ -7,4 +7,4 @@ root=$1; out=$2
 here=$(dirname "$0")/..
 clang --target=aarch64-linux-android35 -fPIC -O2 -shared -nostdlib -fuse-ld=lld \
   -Wl,-soname,libselinux_shim.so -Wl,--hash-style=both \
-  "$here/shim/selinux_shim.c" "$root/system/lib64/bootstrap/libc.so" -o "$out"
+  "$here/shim/selinux_shim.c" "$root/system/lib64/bootstrap/libc.so" "$root/system/lib64/bootstrap/libdl.so" -o "$out"

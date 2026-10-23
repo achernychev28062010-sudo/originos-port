@@ -52,6 +52,50 @@ void selabel_close(void *h) { (void)h; }
 int selabel_lookup(void *h, char **con, const char *key, int type) {
   (void)h; (void)key; (void)type; return ctx(con, "u:object_r:default_android_service:s0");
 }
+// servicemanager asks binder for caller security contexts (SET_CONTEXT_MGR_EXT with
+// TXN_SECURITY_CTX). Without an LSM that provides them the kernel then fails every call
+// to it, so refuse EXT: libbinder falls back to plain SET_CONTEXT_MGR and getpidcon().
+#define BINDER_SET_CONTEXT_MGR_EXT 0x4018620du  // _IOW('b', 13, struct flat_binder_object)
+#define RTLD_NEXT ((void *)-1L)
+extern void *dlsym(void *, const char *);
+extern int *__errno(void);
+int ioctl(int fd, int req, ...) {
+  static int (*real)(int, int, ...);
+  __builtin_va_list ap;
+  __builtin_va_start(ap, req);
+  void *arg = __builtin_va_arg(ap, void *);
+  __builtin_va_end(ap);
+  if ((unsigned)req == BINDER_SET_CONTEXT_MGR_EXT) { *__errno() = 22; return -1; }
+  if (!real) real = (int (*)(int, int, ...))dlsym(RTLD_NEXT, "ioctl");
+  return real(fd, req, arg);
+}
+
+// ...and servicemanager insists on a caller SID for every incoming call
+// (CHECK "Did not get context from PID"), so hand one out.
+const char *_ZNK7android14IPCThreadState13getCallingSidEv(const void *self) {
+  (void)self; return "u:r:init:s0";
+}
+// Services that mark their own binders "requesting SID" (keystore2, keymint...) make the
+// kernel fail every call to them for the same reason; getCallingSid() above covers them.
+void _ZN7android7BBinder16setRequestingSidEb(void *self, _Bool b) { (void)self; (void)b; }
+void _ZN7android8hardware9BHwBinder16setRequestingSidEb(void *self, _Bool b) { (void)self; (void)b; }
+void _ZN7android8hardware16setRequestingSidERKNS_2spINS_4hidl4base4V1_05IBaseEEEb(const void *s, _Bool b) {
+  (void)s; (void)b;
+}
+// same for hwservicemanager (libhwbinder)
+const char *_ZNK7android8hardware14IPCThreadState13getCallingSidEv(const void *self) {
+  (void)self; return "u:r:init:s0";
+}
+
+// Per-service cgroups: after post-fs-data init cannot create them in the container
+// ("Read-only file system") and treats that as fatal. Services just share the
+// container's cgroup instead.
+int _Z18createProcessGroupjib(unsigned uid, int pid, _Bool mem) { (void)uid; (void)pid; (void)mem; return 0; }
+int _Z24createProcessGroupByNamePKcji(const char *n, unsigned uid, int pid) { (void)n; (void)uid; (void)pid; return 0; }
+_Bool _Z20setProcessGroupLimitjil(unsigned uid, int pid, long v) { (void)uid; (void)pid; (void)v; return 1; }
+_Bool _Z24setProcessGroupSoftLimitjil(unsigned uid, int pid, long v) { (void)uid; (void)pid; (void)v; return 1; }
+_Bool _Z25setProcessGroupSwappinessjii(unsigned uid, int pid, int v) { (void)uid; (void)pid; (void)v; return 1; }
+
 int selabel_lookup_best_match(void *h, char **con, const char *key, const char **aliases, int type) {
   (void)h; (void)key; (void)aliases; (void)type; return ctx(con, "u:object_r:system_file:s0");
 }
