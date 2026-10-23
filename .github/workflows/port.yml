@@ -8,16 +8,22 @@ on:
         default: https://sysupdxdl.vivo.com.cn/upgrade/oem/files/20260919214152e4ba49adf9db36886a6d44311a581940.zip
       redroid_tags:
         description: Redroid base images to try, first that pulls wins
-        default: 17.0.0-latest 16.0.0-latest
+        default: 15.0.0-latest
       gpu_mode:
         default: guest
       boot_minutes:
         description: How long to wait for sys.boot_completed
         default: "15"
+      baseline:
+        description: Also test stock Redroid versions
+        type: boolean
+        default: false
 
 jobs:
   # Which stock Redroid actually reaches the home screen on this runner (no GPU)?
+  # Run 2 answer: 14 and 15 boot, 16 crashes in surfaceflinger RenderEngine.
   baseline:
+    if: inputs.baseline
     runs-on: ubuntu-24.04-arm
     timeout-minutes: 30
     strategy:
@@ -63,6 +69,10 @@ jobs:
 
       - name: Boot OriginOS
         run: bash scripts/boot_test.sh originos:port originos ${{ inputs.boot_minutes }} ${{ inputs.gpu_mode }} || true
+
+      - name: Make results readable
+        if: always()
+        run: sudo chown -R "$USER" /work/out && chmod -R a+rX /work/out && ls -laR /work/out
 
       - uses: actions/upload-artifact@v4
         if: always()
