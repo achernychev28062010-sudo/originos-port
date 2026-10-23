@@ -8,9 +8,13 @@ a() { timeout 60 adb -s $dev "$@"; }
 docker rm -f "$name" >/dev/null 2>&1
 sudo dmesg -C
 
-docker run -d --privileged --name "$name" -p 5555:5555 "$img" \
-  androidboot.redroid_width=1080 androidboot.redroid_height=2400 androidboot.redroid_dpi=440 \
-  androidboot.redroid_gpu_mode=$gpu androidboot.selinux=permissive
+if [ "$name" = originos ]; then
+  bash "$(dirname "$0")/run_container.sh" "$img" "$name"
+else
+  docker run -d --privileged --name "$name" -p 5555:5555 "$img" \
+    androidboot.redroid_width=1080 androidboot.redroid_height=2400 androidboot.redroid_dpi=440 \
+    androidboot.redroid_gpu_mode=$gpu androidboot.selinux=permissive
+fi
 
 ok=0
 for i in $(seq $((minutes * 6))); do

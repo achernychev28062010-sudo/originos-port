@@ -35,6 +35,16 @@ if [ "${INIT_FROM:-originos}" = redroid ]; then
   sudo cp -a "$R/system/bin/init" "$O/system/bin/init"
 fi
 sudo ln -sfn /system/bin/init "$O/init"
+# OriginOS turns on 32-bit zygote; Redroid's vendor and the runner only do 64-bit.
+# product props load last, so they win.
+sudo tee -a "$O/product/etc/build.prop" >/dev/null <<'EOF'
+# container port overrides
+ro.zygote=zygote64
+ro.product.cpu.abilist=arm64-v8a
+ro.product.cpu.abilist32=
+ro.product.cpu.abilist64=arm64-v8a
+ro.vendor.init_dev_config=/dev/null
+EOF
 [ -f "$R/system/etc/init/redroid.rc" ] && sudo cp -a "$R/system/etc/init/redroid.rc" "$O/system/etc/init/" || true
 [ -n "${KEEP:-}" ] || sudo rm -rf "$R"
 

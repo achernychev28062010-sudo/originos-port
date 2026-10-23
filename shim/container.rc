@@ -1,0 +1,3 @@
+# Container port: every service gets the SELinux shim, since the host kernel has no SELinux.
+on early-init
+    export LD_PRELOAD /system/lib64/libselinux_shim.so

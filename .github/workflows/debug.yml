@@ -29,7 +29,8 @@ jobs:
           sudo sed -i 's/^#\?PasswordAuthentication.*/PasswordAuthentication no/' /etc/ssh/sshd_config
           sudo systemctl start ssh || sudo service ssh start
           curl -sL https://github.com/ekzhang/bore/releases/download/v0.5.2/bore-v0.5.2-aarch64-unknown-linux-musl.tar.gz | sudo tar -xz -C /usr/local/bin
-          nohup bore local 22 --to bore.pub > /tmp/bore.log 2>&1 &
+          # bore.pub drops idle tunnels; keep reconnecting on the same port
+          nohup bash -c 'bore local 22 --to bore.pub > /tmp/bore.log 2>&1; p=$(grep -o "bore.pub:[0-9]*" /tmp/bore.log | head -1 | cut -d: -f2); while true; do bore local 22 --to bore.pub --port $p >> /tmp/bore.log 2>&1; sleep 5; done' >/dev/null 2>&1 &
           sleep 5; cat /tmp/bore.log
 
       - run: bash scripts/fetch_ota.sh "${{ inputs.ota_url }}" /work/ota
