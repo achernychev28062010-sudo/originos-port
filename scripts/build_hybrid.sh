@@ -29,8 +29,11 @@ for part in vendor odm; do
   [ -d "$R/$part" ] && sudo cp -a "$R/$part" "$O/$part" || sudo mkdir -p "$O/$part"
 done
 
-# 3. Redroid init knows it runs in a container (no first stage, no real partitions)
-sudo cp -a "$R/system/bin/init" "$O/system/bin/init"
+# 3. init: OriginOS's own by default. Redroid 15 init is linked against Android 15 libs
+#    (fmt v11) and cannot load on OriginOS 7's Android 17 libraries.
+if [ "${INIT_FROM:-originos}" = redroid ]; then
+  sudo cp -a "$R/system/bin/init" "$O/system/bin/init"
+fi
 sudo ln -sfn /system/bin/init "$O/init"
 [ -f "$R/system/etc/init/redroid.rc" ] && sudo cp -a "$R/system/etc/init/redroid.rc" "$O/system/etc/init/" || true
 sudo rm -rf "$R"
